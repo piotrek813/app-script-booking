@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="pl">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Prosty Scheduler</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 500px;
+            margin: 40px auto;
+        }
+
+        select,
+        input,
+        button {
+            width: 100%;
+            padding: 8px;
+            margin: 8px 0;
+        }
+
+        #status {
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>Rezerwacja</h2>
+    <form id="reservationForm">
+        <label for="workerSelect">Pracownik:</label>
+        <select id="workerSelect" required>
+            <option value="">-- wybierz --</option>
+            <? for (var i = 0; i < workers.length; i++) { ?>
+            <option value="<?= workers[i] ?>">
+                <?= workers[i] ?>
+            </option>
+            <? } ?>
+        </select>
+
+        <label for="topicSelect">Temat:</label>
+        <select id="topicSelect" required>
+            <option value="">-- wybierz --</option>
+            <? for (var i = 0; i < topics.length; i++) { ?>
+            <option value="<?= topics[i] ?>">
+                <?= topics[i] ?>
+            </option>
+            <? } ?>
+        </select>
+
+        <label for="dateInput">Data:</label>
+        <input type="date" id="dateInput" required />
+
+        <label for="timeSelect">Godzina:</label>
+        <select id="timeSelect" required>
+            <option value="">-- wybierz --</option>
+        </select>
+
+        <button type="submit">Zarezerwuj</button>
+        <div id="status"></div>
+    </form>
+
+    <script>
+        // ----- Client-side JS -----
+        const workerSelect = document.getElementById('workerSelect');
+        const dateInput = document.getElementById('dateInput');
+        const timeSelect = document.getElementById('timeSelect');
+        const statusDiv = document.getElementById('status');
+
+        function loadTimeSlots() {
+            const worker = workerSelect.value;
+            const date = dateInput.value;
+            if (!worker || !date) return;
+
+            timeSelect.innerHTML = '<option value="">-- wybierz --</option>';
+
+            google.script.run
+                .withSuccessHandler(slots => {
+                    if (!slots.length) {
+                        const opt = document.createElement('option');
+                        opt.text = 'Brak dostępnych godzin';
+                        opt.value = '';
+                        timeSelect.add(opt);
+                        return;
+                    }
+                    slots.forEach(s => {
+                        const opt = document.createElement('option');
+                        opt.text = s;
+                        opt.value = s;
+                        timeSelect.add(opt);
+                    });
+                })
+                .withFailureHandler(err => {
+                    console.error(err);
+                    statusDiv.innerText = 'Błąd podczas ładowania godzin: ' + (err.message || err);
+                })
+                .getWorkingHours(worker, date);
+        }
+
+        workerSelect.addEventListener('change', loadTimeSlots);
+        dateInput.addEventListener('change', loadTimeSlots);
+
+        document.getElementById('reservationForm').addEventListener('submit', e => {
+            e.preventDefault();
+            const data = {
+                worker: workerSelect.value,
+                topic: document.getElementById('topicSelect').value,
+                date: dateInput.value,
+                time: timeSelect.value
+            };
+
+            if (!data.worker || !data.topic || !data.date || !data.time) {
+                statusDiv.innerText = 'Wypełnij wszystkie pola.';
+                return;
+            }
+
+            google.script.run
+                .withSuccessHandler(msg => {
+                    statusDiv.innerText = msg === 'OK' ? '✅ Rezerwacja zapisana!' : '❌ Błąd';
+                    document.getElementById('reservationForm').reset();
+                    timeSelect.innerHTML = '<option value="">-- wybierz --</option>';
+                })
+                .withFailureHandler(err => {
+                    statusDiv.innerText = '⚠️ Błąd: ' + (err.message || err);
+                })
+                .saveReservation(data);
+        });
+
+    </script>
+</body>
+
+</html>
